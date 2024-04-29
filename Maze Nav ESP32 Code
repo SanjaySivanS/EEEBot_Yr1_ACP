@@ -1,0 +1,176 @@
+#include <Wire.h>
+
+#define ENC_A 36
+#define ENC_B 39
+#define ENC_A2 34  
+#define ENC_B2 35  
+
+const int SLAVE_ADDRESS = 9; 
+
+// Here we have defined pins for motor A
+int motor1Pin1 = 26;
+int motor1Pin2 = 27;
+int enable1Pin = 33;
+
+// Here we have defined pins for motor B
+int motor2Pin1 = 14;
+int motor2Pin2 = 12;
+int enable2Pin = 25;
+
+const int freq = 2000;
+const int servoFrequency = 50;
+const int ledChannela = 0;
+const int ledChannelb = 1;
+const int servoChannel = 2;
+const int resolution = 8;
+const int servoResolution = 12;
+
+int servoPin = 13;
+float steeringAngle;
+int servoValue;
+
+unsigned long _lastIncReadTime, _lastDecReadTime; 
+int _pauseLength = 25000;
+int _fastIncrement = 10;
+
+int counter, counter2;
+
+const int ROWS = 20;
+const int COLS = 2;
+int comArray[ROWS][COLS]; // Array to store received comArray
+
+void setup() {
+  pinMode(ENC_A, INPUT_PULLUP);
+  pinMode(ENC_B, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ENC_A), read_encoder, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENC_B), read_encoder, CHANGE);
+
+  pinMode(ENC_A2, INPUT_PULLUP);
+  pinMode(ENC_B2, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ENC_A2), read_encoder2, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENC_B2), read_encoder2, CHANGE);
+
+  /*----------------------------------------------------------------------------------------*/
+
+  pinMode(motor1Pin1, OUTPUT);
+  pinMode(motor1Pin2, OUTPUT);
+  pinMode(enable1Pin, OUTPUT);
+
+// sets the pins for motor2 as outputs:
+  pinMode(motor2Pin1, OUTPUT);
+  pinMode(motor2Pin2, OUTPUT);
+  pinMode(enable2Pin, OUTPUT);
+
+  digitalWrite(enable1Pin, HIGH);
+  digitalWrite(enable2Pin, HIGH);
+
+  ledcSetup(servoChannel, servoFrequency, servoResolution);
+  ledcAttachPin(servoPin, servoChannel);
+
+  Wire.begin(SLAVE_ADDRESS); // join i2c bus as slave
+  Wire.onReceive(receiveEvent);
+
+  Serial.begin(115200);
+}
+
+void loop (){
+  //steerControl();
+  serialdisplayENC();
+}
+
+void serialdisplayENC() {
+  static int lastCounter = 0;
+  static int lastCounter2 = 0;
+
+  if (counter != lastCounter) {
+    Serial.println(abs(counter));
+    lastCounter = counter;
+  }
+
+  if (counter2 != lastCounter2) {
+    Serial.println(abs(counter2));
+    lastCounter2 = counter2;
+  }
+}
+
+void read_encoder() {
+  static uint8_t old_AB = 3;
+  static int8_t encval = 0;
+
+  static const int8_t enc_states[] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
+
+  old_AB <<= 2;
+
+  if (digitalRead(ENC_A)) old_AB |= 0x02;
+  if (digitalRead(ENC_B)) old_AB |= 0x01;
+
+  encval += enc_states[old_AB & 0x0f];
+
+  if (encval > 3) {
+    int changevalue = 1;
+    if ((micros() - _lastIncReadTime) < _pauseLength) {
+      changevalue = _fastIncrement * changevalue;
+    }
+    _lastIncReadTime = micros();
+    counter += changevalue;
+    encval = 0;
+  } else if (encval < -3) {
+    int changevalue = -1;
+    if ((micros() - _lastDecReadTime) < _pauseLength) {
+      changevalue = _fastIncrement * changevalue;
+    }
+    _lastDecReadTime = micros();
+    counter += changevalue;
+    encval = 0;
+  }
+}
+
+void read_encoder2() {
+  static uint8_t old_AB2 = 3;
+  static int8_t encval2 = 0;
+
+  static const int8_t enc_states[] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
+
+  old_AB2 <<= 2;
+
+  if (digitalRead(ENC_A2)) old_AB2 |= 0x02;
+  if (digitalRead(ENC_B2)) old_AB2 |= 0x01;
+
+  encval2 += enc_states[old_AB2 & 0x0f];
+
+  if (encval2 > 3) {
+    int changevalue = 1;
+    if ((micros() - _lastIncReadTime) < _pauseLength) {
+      changevalue = _fastIncrement * changevalue;
+    }
+    _lastIncReadTime = micros();
+    counter2 += changevalue;
+    encval2 = 0;
+  } else if (encval2 < -3) {
+    int changevalue = -1;
+    if ((micros() - _lastDecReadTime) < _pauseLength) {
+      changevalue = _fastIncrement * changevalue;
+    }
+    _lastDecReadTime = micros();
+    counter2 += changevalue;
+    encval2 = 0;
+  }
+}
+
+void carstop() {
+  digitalWrite(motor1Pin1, LOW);
+  digitalWrite(motor1Pin2, LOW);
+  digitalWrite(motor2Pin1, LOW);
+  digitalWrite(motor2Pin2, LOW);
+}
+
+void carforward(){
+  digitalWrite(motor1Pin1, HIGH);
+  digitalWrite(motor1Pin2, LOW);
+  digitalWrite(motor2Pin1, HIGH);
+  digitalWrite(motor2Pin2, LOW);
+}
+void steerControl(){
+ ledcWrite(servoChannel,servoValue);
+}
+
